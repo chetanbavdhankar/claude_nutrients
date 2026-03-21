@@ -520,6 +520,65 @@ def print_savings_summary(plan: dict):
     print(f"  Estimated reduction:           ~{naive_count - unique_count} fewer purchases")
 
 
+# ─── Pantry Search ───────────────────────────────────────────────────────────
+
+def find_cookable_dishes(user_ingredients_raw: str, df: pd.DataFrame, top_n: int = 10) -> list[dict]:
+    """
+    Find dishes ranked by % of their ingredients that the user already has.
+    Returns top_n results sorted by match_pct desc, then missing count asc.
+    """
+    user_ingredients = parse_ingredients(user_ingredients_raw)
+
+    results = []
+    for _, row in df.iterrows():
+        dish_ingredients = row["Parsed_Ingredients"]
+        if not dish_ingredients:
+            continue
+        have = user_ingredients & dish_ingredients
+        missing = dish_ingredients - user_ingredients
+        match_pct = round(len(have) / len(dish_ingredients) * 100)
+        results.append({
+            "name": row["Dish_Name"],
+            "category": row["Category"],
+            "cuisine": row["Cuisine"],
+            "dietary": row["Dietary_Type"],
+            "match_pct": match_pct,
+            "have": sorted(have),
+            "missing": sorted(missing),
+            "total_ingredients": len(dish_ingredients),
+            "have_count": len(have),
+            "missing_count": len(missing),
+            "nutrient_score": int(row["Nutrient_Score"]),
+            "ingredients": row["Ingredients"],
+            "recipe": row["Recipe"],
+        })
+
+    results.sort(key=lambda x: (-x["match_pct"], x["missing_count"]))
+    return results[:top_n]
+
+
+def print_pantry_results(matches: list[dict]):
+    """Print pantry search results to the console."""
+    print("\n" + "=" * 65)
+    print("  WHAT YOU CAN COOK")
+    print("=" * 65)
+
+    if not matches:
+        print("\n  No matches found. Try adding more ingredients.")
+        return
+
+    for i, m in enumerate(matches, 1):
+        bar_len = round(m["match_pct"] / 5)
+        bar = "#" * bar_len + "-" * (20 - bar_len)
+        print(f"\n  {i:>2}. {m['name']}")
+        print(f"      {m['category']} | {m['cuisine']} | {m['dietary']}")
+        print(f"      Match: [{bar}] {m['match_pct']}%  ({m['have_count']}/{m['total_ingredients']} ingredients)")
+        if m["have"]:
+            print(f"      Have:    {', '.join(m['have'])}")
+        if m["missing"]:
+            print(f"      Missing: {', '.join(m['missing'])}")
+
+
 # ─── User Questionnaire ─────────────────────────────────────────────────────
 
 def get_user_input() -> tuple[int, str, int]:
@@ -563,10 +622,45 @@ def get_user_input() -> tuple[int, str, int]:
 
 def main():
     random.seed()
+
+    print("\n" + "=" * 65)
+    print("  NUTRIPLAN — Smart Meal Planner")
+    print("=" * 65)
+    print("\n  [1] Plan my meals")
+    print("  [2] What can I cook with what I have?")
+    while True:
+        choice = input("\n  Choose mode (1 or 2): ").strip()
+        if choice in ("1", "2"):
+            break
+        print("  Please enter 1 or 2.")
+
+    df = load_and_enrich("dishes.csv")
+
+    if choice == "2":
+        print("\n  Enter the ingredients you currently have.")
+        print("  Separate them with commas or put each on a new line.")
+        print("  Type 'done' on a blank line when finished.\n")
+        lines = []
+        while True:
+            line = input("  > ").strip()
+            if line.lower() == "done" or line == "":
+                if lines:
+                    break
+                print("  Please enter at least one ingredient.")
+            else:
+                lines.append(line)
+        user_raw = ", ".join(lines)
+        print(f"\n  Searching {len(df)} dishes for matches...")
+        matches = find_cookable_dishes(user_raw, df, top_n=10)
+        print_pantry_results(matches)
+        print("\n" + "=" * 65)
+        print("  Happy cooking! Smacznego!")
+        print("=" * 65 + "\n")
+        return
+
     cal_target, dietary, num_days = get_user_input()
 
     print(f"\n  Loading dishes and optimizing for ingredient overlap...")
-    df = load_and_enrich("dishes.csv")
 
     plan, all_ingredients = generate_plan(df, cal_target, dietary, num_days)
 

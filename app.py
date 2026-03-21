@@ -16,6 +16,8 @@ from meal_planner import (
     generate_plan,
     get_aisle,
     AISLE_MAP,
+    parse_ingredients,
+    find_cookable_dishes,
 )
 
 app = Flask(__name__)
@@ -192,6 +194,29 @@ def api_generate():
             "days": num_days,
             "cuisines": cuisine_filter if cuisine_filter else AVAILABLE_CUISINES,
         },
+    })
+
+
+@app.route("/api/pantry-search", methods=["POST"])
+def api_pantry_search():
+    data = request.get_json()
+    ingredients_raw = data.get("ingredients", "")
+    top_n = int(data.get("top_n", 10))
+
+    if not ingredients_raw.strip():
+        return jsonify({"error": "No ingredients provided"}), 400
+
+    # Normalize the comma/newline-separated input into a single CSV string
+    # (parse_ingredients handles both commas and we join newlines with commas)
+    normalized_raw = ingredients_raw.replace("\n", ",").replace("\r", ",")
+
+    matches = find_cookable_dishes(normalized_raw, DF, top_n=top_n)
+    user_ingredients = parse_ingredients(normalized_raw)
+
+    return jsonify({
+        "matches": matches,
+        "user_ingredients_count": len(user_ingredients),
+        "user_ingredients": sorted(user_ingredients),
     })
 
 
