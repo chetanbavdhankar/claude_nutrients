@@ -10,6 +10,7 @@ An interactive meal planner that builds a week of Indian/European/Fusion meals w
 - **Cuisine filtering** — Indian, European, Fusion — mix and match
 - **4 export formats** — plain text plan, shopping list, `.ics` calendar events, and a print-ready layout
 - **Interactive grocery checklist** — tap items to check them off while shopping
+- **Dual deployment** — run locally with Python or deploy to Render (or any cloud host) with zero code changes
 
 ## Project Structure
 
@@ -20,15 +21,18 @@ claude_nutrients/
 ├── app.py              # Flask web server + API endpoints
 ├── templates/
 │   └── index.html      # Single-page web app (questionnaire + results)
+├── requirements.txt    # Python dependencies (Flask, pandas, gunicorn)
+├── Procfile            # Process file for Render / Heroku deployment
+├── render.yaml         # One-click Render deployment config
 └── README.md
 ```
 
-## Quick Start
+## Quick Start — Local
 
 ### 1. Install dependencies
 
 ```bash
-pip install flask pandas
+pip install -r requirements.txt
 ```
 
 ### 2. Run the web app
@@ -46,6 +50,40 @@ python meal_planner.py
 ```
 
 Prompts for calorie goal, dietary preference, and duration, then prints the plan and shopping list to the terminal.
+
+---
+
+## Deployment — Render (Online Hosting)
+
+The app is fully ready to deploy to [Render](https://render.com) (free tier available) with no code changes required.
+
+### Steps
+
+1. **Push this repo to GitHub** (or GitLab)
+2. Go to [render.com](https://render.com) → **New → Web Service**
+3. Connect your GitHub repository
+4. Render auto-detects `render.yaml` and pre-fills all settings:
+   - **Build Command:** `pip install -r requirements.txt`
+   - **Start Command:** `gunicorn app:app`
+   - **Environment:** `FLASK_ENV=production`
+5. Click **Deploy** — your app will be live at a `*.onrender.com` URL in ~2 minutes
+
+### How local vs. production differs
+
+| | Local | Render (Production) |
+|---|---|---|
+| **Server** | Flask dev server | Gunicorn (WSGI) |
+| **Port** | `5000` (default) | Auto-assigned by Render via `$PORT` |
+| **Debug mode** | ✅ On | ❌ Off (`FLASK_ENV=production`) |
+| **Start command** | `python app.py` | `gunicorn app:app` |
+
+> **How it works:** Gunicorn imports and serves the `app` object directly, bypassing the `if __name__ == "__main__"` block. The `PORT` environment variable (injected by Render) is read automatically — no hard-coded port numbers.
+
+### Other supported platforms
+
+The same setup works on **Heroku**, **Railway**, **Fly.io**, and any platform that supports Python + `Procfile` or a custom start command.
+
+---
 
 ## How It Works
 
@@ -98,3 +136,4 @@ Base estimates by category (Breakfast ~350, Snack ~180, Lunch ~550, Dinner ~500 
 - Python 3.10+
 - `pandas`
 - `flask`
+- `gunicorn` *(required for production/Render deployment; not needed for local)*
